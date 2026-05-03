@@ -9,6 +9,9 @@ trigger:
 pool:
   vmImage: 'ubuntu-latest'
 
+variables:
+  serviceConnection: 'Azure subscription 1'
+
 stages:
 
 # ---------------- INIT + PLAN ----------------
@@ -22,16 +25,19 @@ stages:
       inputs:
         terraformVersion: 'latest'
 
-    - script: |
-        terraform init
-      displayName: Terraform Init
-
-    - script: |
-        terraform plan -out=tfplan
-      displayName: Terraform Plan
+    # 🔐 Azure login FIX (IMPORTANT)
+    - task: AzureCLI@2
+      inputs:
+        azureSubscription: $(serviceConnection)
+        scriptType: bash
+        scriptLocation: inlineScript
+        inlineScript: |
+          terraform init
+          terraform plan -out=tfplan
 
     - publish: tfplan
       artifact: tfplan
+
 
 # ---------------- APPLY (Manual Approval) ----------------
 - stage: Apply
@@ -46,10 +52,16 @@ stages:
       runOnce:
         deploy:
           steps:
-          - script: |
-              terraform init
-              terraform apply -auto-approve tfplan
-            displayName: Terraform Apply
+
+          - task: AzureCLI@2
+            inputs:
+              azureSubscription: $(serviceConnection)
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                terraform init
+                terraform apply -auto-approve tfplan
+
 
 # ---------------- DESTROY (Manual Approval) ----------------
 - stage: Destroy
@@ -63,7 +75,12 @@ stages:
       runOnce:
         deploy:
           steps:
-          - script: |
-              terraform init
-              terraform destroy -auto-approve
-            displayName: Terraform Destroy
+
+          - task: AzureCLI@2
+            inputs:
+              azureSubscription: $(serviceConnection)
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                terraform init
+                terraform destroy -auto-approve
