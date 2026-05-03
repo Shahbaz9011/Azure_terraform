@@ -5,12 +5,8 @@ terraform {
       version = "4.64.0"
     }
   }
-  backend "azurerm" {
-    resource_group_name  = "chintu"          # Can be passed via `-backend-config=`"resource_group_name=<resource group name>"` in the `init` command.
-    storage_account_name = "mintu2512"                              # Can be passed via `-backend-config=`"storage_account_name=<storage account name>"` in the `init` command.
-    container_name       = "chintu12"                               # Can be passed via `-backend-config=`"container_name=<container name>"` in the `init` command.
-    key                  = "prod.terraform.tfstate"                # Can be passed via `-backend-config=`"key=<blob key name>"` in the `init` command.
-  }
+
+  backend "azurerm" {}
 }
 
 provider "azurerm" {
@@ -18,7 +14,12 @@ provider "azurerm" {
 }
 
 # -------------------------------
-# Resource Group
+# VARIABLES
+# -------------------------------
+variable "ssh_public_key" {}
+
+# -------------------------------
+# RESOURCE GROUP
 # -------------------------------
 resource "azurerm_resource_group" "rg" {
   name     = "myResourceGroup"
@@ -26,18 +27,17 @@ resource "azurerm_resource_group" "rg" {
 }
 
 # -------------------------------
-# Virtual Network
+# VNET
 # -------------------------------
 resource "azurerm_virtual_network" "vnet" {
   name                = "myVnet"
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
   address_space       = ["10.0.0.0/16"]
-  
 }
 
 # -------------------------------
-# Subnet
+# SUBNET
 # -------------------------------
 resource "azurerm_subnet" "subnet" {
   name                 = "mySubnet"
@@ -47,7 +47,7 @@ resource "azurerm_subnet" "subnet" {
 }
 
 # -------------------------------
-# Public IP (Standard - REQUIRED)
+# PUBLIC IP
 # -------------------------------
 resource "azurerm_public_ip" "pip" {
   name                = "myPublicIP"
@@ -56,18 +56,16 @@ resource "azurerm_public_ip" "pip" {
 
   allocation_method = "Static"
   sku               = "Standard"
-  
 }
 
 # -------------------------------
-# Network Security Group
+# NSG
 # -------------------------------
 resource "azurerm_network_security_group" "nsg" {
   name                = "myNSG"
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
 
-  # SSH (22)
   security_rule {
     name                       = "Allow-SSH"
     priority                   = 1000
@@ -80,7 +78,6 @@ resource "azurerm_network_security_group" "nsg" {
     destination_address_prefix = "*"
   }
 
-  # HTTP (80)
   security_rule {
     name                       = "Allow-HTTP"
     priority                   = 1001
@@ -95,7 +92,7 @@ resource "azurerm_network_security_group" "nsg" {
 }
 
 # -------------------------------
-# Network Interface
+# NIC
 # -------------------------------
 resource "azurerm_network_interface" "nic" {
   name                = "myNIC"
@@ -111,7 +108,7 @@ resource "azurerm_network_interface" "nic" {
 }
 
 # -------------------------------
-# NSG Association
+# NSG ASSOCIATION
 # -------------------------------
 resource "azurerm_network_interface_security_group_association" "nsg_assoc" {
   network_interface_id      = azurerm_network_interface.nic.id
@@ -119,7 +116,7 @@ resource "azurerm_network_interface_security_group_association" "nsg_assoc" {
 }
 
 # -------------------------------
-# Linux VM + Auto Nginx Setup
+# LINUX VM
 # -------------------------------
 resource "azurerm_linux_virtual_machine" "vm" {
   name                = "myLinuxVM"
@@ -134,7 +131,7 @@ resource "azurerm_linux_virtual_machine" "vm" {
 
   admin_ssh_key {
     username   = "azureuser"
-    public_key = file(pathexpand("~/.ssh/id_rsa.pub"))
+    public_key = var.ssh_public_key
   }
 
   os_disk {
@@ -150,32 +147,21 @@ resource "azurerm_linux_virtual_machine" "vm" {
     version   = "latest"
   }
 
-  computer_name = "myvm"
   disable_password_authentication = true
 
-  # 🔥 AUTO INSTALL NGINX + WEB PAGE
   custom_data = base64encode(<<EOF
 #!/bin/bash
-
 apt update -y
 apt install nginx -y
-
 systemctl enable nginx
 systemctl start nginx
-
-echo "🚀 Shabaz Deepak Honey Indra 🚀" > /var/www/html/index.html
-
-systemctl restart nginx
+echo "🚀 CI/CD Deployed VM 🚀" > /var/www/html/index.html
 EOF
   )
-
-  tags = {
-    environment = "dev"
-  }
 }
 
 # -------------------------------
-# OUTPUT PUBLIC IP
+# OUTPUT
 # -------------------------------
 output "public_ip" {
   value = azurerm_public_ip.pip.ip_address
